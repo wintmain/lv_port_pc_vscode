@@ -11,7 +11,9 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-#if LV_USE_OS == LV_OS_FREERTOS
+/* On Apple, src/freertos_main_apple.c owns the entry point (Cocoa keeps SDL
+ * on the main thread); this file compiles empty there. */
+#if LV_USE_OS == LV_OS_FREERTOS && !defined(__APPLE__)
 
 #include "hal/hal.h"
 #include <stdio.h>
@@ -187,4 +189,4 @@ int main(int argc, char **argv)
     vTaskStartScheduler();
 }
 
-#endif
+#endif /* LV_USE_OS == LV_OS_FREERTOS && !defined(__APPLE__) */

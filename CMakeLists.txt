@@ -8,7 +8,11 @@ set(LVGL_PRO_PROJECT_DIR
     ""
     CACHE PATH "Path to LVGL Pro Project folder")
 
-option(USE_FREERTOS "Enable FreeRTOS" OFF) # Turn this on to enable FreeRTOS
+# FreeRTOS is ON by default so `cmake -S . -B build` needs no extra -D.
+# CMake caches this: a build/ configured with OFF stays OFF until you delete
+# build/ or pass -DUSE_FREERTOS=ON once. LV_USE_OS in lv_conf.h selects
+# LVGL's internal OS and is respected verbatim.
+option(USE_FREERTOS "Enable FreeRTOS" ON)
 
 if(USE_FREERTOS)
     message(STATUS "FreeRTOS is enabled")
@@ -18,6 +22,9 @@ if(USE_FREERTOS)
     target_include_directories(freertos_config SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/config)
     target_compile_definitions(freertos_config INTERFACE projCOVERAGE_TEST=0)
 
+    # Required before add_subdirectory so freertos_kernel compiles a heap.
+    set(FREERTOS_HEAP 4 CACHE STRING "FreeRTOS heap implementation (1..5)")
+
     # Add FreeRTOS as a subdirectory
     add_subdirectory(FreeRTOS)
 
@@ -25,16 +32,8 @@ if(USE_FREERTOS)
     include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/include)
     include_directories(${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix)
     include_directories(${PROJECT_SOURCE_DIR}/config)
-
-    # Add FreeRTOS sources
-    file(GLOB FREERTOS_SOURCES
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/*.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/MemMang/heap_4.c"
-        "${PROJECT_SOURCE_DIR}/FreeRTOS/portable/ThirdParty/GCC/Posix/*.c"
-    )
 else()
     message(STATUS "FreeRTOS is disabled")
-    set(FREERTOS_SOURCES "")  # No FreeRTOS sources if FreeRTOS is disabled
 endif()
 
 # Main include files of the project
@@ -73,7 +72,12 @@ set(MAIN_LIBS lvgl lvgl::examples lvgl::demos lvgl::thorvg ${SDL2_LIBRARIES})
 
 # Create the main executable, depending on the FreeRTOS option
 if(USE_FREERTOS)
-    list(APPEND MAIN_SOURCES src/freertos_main.c src/freertos/freertos_posix_port.c ${FREERTOS_SOURCES})
+    list(APPEND MAIN_SOURCES src/freertos_main.c src/freertos/freertos_posix_port.c)
+    if(APPLE)
+        # On Apple, freertos_main.c compiles empty; this file owns main() for
+        # every LV_USE_OS value (see each file's guards).
+        list(APPEND MAIN_SOURCES src/freertos_main_apple.c)
+    endif()
     list(APPEND MAIN_LIBS freertos_config freertos_kernel)
 else()
     list(APPEND MAIN_SOURCES src/main.c)
